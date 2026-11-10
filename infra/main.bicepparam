@@ -2,9 +2,16 @@ using './main.bicep'
 
 param location = 'eastus'
 
-// Read from the environment so no object ID is committed. Deployment fails fast if unset.
-//   PowerShell: $env:AZURE_PRINCIPAL_ID = (az ad signed-in-user show --query id -o tsv)
+// Identity values come from the environment so they are not committed. Deployment fails fast
+// if either is unset. PowerShell:
+//   $env:AZURE_PRINCIPAL_ID   = (az ad signed-in-user show --query id -o tsv)
+//   $env:AZURE_PRINCIPAL_NAME = (az ad signed-in-user show --query userPrincipalName -o tsv)
 param principalId = readEnvironmentVariable('AZURE_PRINCIPAL_ID')
+param principalName = readEnvironmentVariable('AZURE_PRINCIPAL_NAME')
+
+// Optional: your public IP for direct PostgreSQL access from this machine.
+//   $env:DEV_CLIENT_IP = (Invoke-RestMethod https://api.ipify.org)
+param devClientIp = readEnvironmentVariable('DEV_CLIENT_IP', '')
 
 // Pinned so a redeploy in a later month does not move the budget's start date.
 param budgetStartDate = '2026-11-01'

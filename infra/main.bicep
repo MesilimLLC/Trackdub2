@@ -18,6 +18,15 @@ param resourceGroupName string = 'rg-trackdub2-spike'
 @description('Entra object ID of the person running the spike. Receives Foundry User on the account and Storage Blob Data Contributor on the storage account.')
 param principalId string
 
+@description('Entra user principal name of the same person, used as the PostgreSQL Entra administrator. Read from the environment so it is not committed.')
+param principalName string
+
+@description('Public IP of the developer machine, allowed through the PostgreSQL firewall. Empty for no rule.')
+param devClientIp string = ''
+
+@description('App Service runtime for the triage agent.')
+param triageAppRuntime string = 'DOTNETCORE|10.0'
+
 @description('Type of principalId.')
 @allowed([
   'User'
@@ -68,6 +77,7 @@ var budgetAlerts = [
   { name: 'creditWarning', usd: 4000 }
 ]
 
+// 2025-04-01 is the newest version the Bicep CLI (0.49.2) has types for.
 resource rg 'Microsoft.Resources/resourceGroups@2025-04-01' = {
   name: resourceGroupName
   location: location
@@ -81,10 +91,13 @@ module resources 'resources.bicep' = {
     location: location
     tags: tags
     principalId: principalId
+    principalName: principalName
     principalType: principalType
     disableLocalAuth: disableLocalAuth
     translatorCapacity: translatorCapacity
     judgeCapacity: judgeCapacity
+    devClientIp: devClientIp
+    triageAppRuntime: triageAppRuntime
   }
 }
 
@@ -120,3 +133,7 @@ output mediaContainerName string = resources.outputs.mediaContainerName
 output appInsightsName string = resources.outputs.appInsightsName
 output translatorDeployment string = resources.outputs.translatorDeployment
 output judgeDeployment string = resources.outputs.judgeDeployment
+output postgresHost string = resources.outputs.postgresHost
+output postgresDatabase string = resources.outputs.postgresDatabase
+output registryLoginServer string = resources.outputs.registryLoginServer
+output triageAppHostName string = resources.outputs.triageAppHostName
