@@ -24,6 +24,9 @@ param principalName string
 @description('Public IP of the developer machine, allowed through the PostgreSQL firewall. Empty for no rule.')
 param devClientIp string = ''
 
+@description('Region for PostgreSQL. This subscription has no PostgreSQL Flexible Server offering in eastus (checked 2026-11-10); centralus is the nearest region that has it.')
+param postgresLocation string = 'centralus'
+
 @description('App Service runtime for the triage agent.')
 param triageAppRuntime string = 'DOTNETCORE|10.0'
 
@@ -98,6 +101,7 @@ module resources 'resources.bicep' = {
     judgeCapacity: judgeCapacity
     devClientIp: devClientIp
     triageAppRuntime: triageAppRuntime
+    postgresLocation: postgresLocation
   }
 }
 

@@ -21,6 +21,7 @@ param translatorCapacity int
 param judgeCapacity int
 param devClientIp string
 param triageAppRuntime string
+param postgresLocation string
 
 var suffix = uniqueString(resourceGroup().id)
 var accountName = 'aif-td2-${suffix}'
@@ -156,7 +157,8 @@ resource project 'Microsoft.CognitiveServices/accounts/projects@2026-09-01' = {
   }
 }
 
-// One account accepts only one deployment change at a time, so create them serially.
+// The account accepts one child change at a time, so deployments run serially and after the
+// project; creating the project alongside them fails with RequestConflict.
 @batchSize(1)
 resource deployments 'Microsoft.CognitiveServices/accounts/deployments@2026-09-01' = [
   for d in modelDeployments: {
@@ -174,6 +176,9 @@ resource deployments 'Microsoft.CognitiveServices/accounts/deployments@2026-09-0
       }
       versionUpgradeOption: 'NoAutoUpgrade'
     }
+    dependsOn: [
+      project
+    ]
   }
 ]
 
@@ -182,7 +187,7 @@ resource deployments 'Microsoft.CognitiveServices/accounts/deployments@2026-09-0
 
 resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2026-10-01' = {
   name: 'psql-td2-${suffix}'
-  location: location
+  location: postgresLocation
   tags: tags
   sku: {
     name: 'Standard_B1ms'

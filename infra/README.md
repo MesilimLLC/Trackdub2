@@ -10,7 +10,7 @@ Milestone 3 goal: at least five Azure services, each above $1 of spend, for 60 d
 | Foundry account (AIServices, S0) + project `trackdub2-spike` | gpt-6 deployments, evaluations, fine-tuning | per use | Foundry Models |
 | (same account) | Speech: transcription, TTS, video translation | per use | Azure Speech |
 | Deployments `gpt-6-luna` (50K TPM), `gpt-6-sol` (10K TPM) | Translator and meaning judge; versions pinned | per token | (Foundry Models) |
-| PostgreSQL Flexible Server B1ms, Postgres 17, database `trackdub2` | Runs, verdicts, corpus; Entra login only | ~$12 + storage | PostgreSQL |
+| PostgreSQL Flexible Server B1ms, Postgres 17, database `trackdub2` (centralus) | Runs, verdicts, corpus; Entra login only | ~$12 + storage | PostgreSQL |
 | Container Registry Basic | Pipeline and triage agent images; no admin user | ~$5 | Container Registry |
 | App Service B1 Linux + web app `app-td2-triage-*` | Triage agent host; managed identity, basic-auth publishing off | ~$13 | App Service |
 | Storage account (Standard_LRS) + container `media` | Video translation input/output, clips | cents | buffer, probably under $1 |
@@ -48,8 +48,9 @@ az deployment sub create --location eastus --name trackdub2-spike --parameters i
 The outputs include the project endpoint, deployment names, PostgreSQL host, registry login server
 and triage app host name.
 
-What-if passed on 2026-11-10 (25 creates, no changes or deletes). What-if doesn't check model
-quota, the Postgres major version or name availability; those surface on the first real deploy.
+Deployed 2026-11-10. What-if doesn't check offer restrictions: the first deploy found that this
+subscription has no PostgreSQL Flexible Server offering in eastus, eastus2, southcentralus or
+westus2, so PostgreSQL runs in centralus (`postgresLocation`). Everything else is in eastus.
 
 ## If a Speech API rejects Entra tokens
 
