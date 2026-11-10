@@ -15,9 +15,11 @@ better-timed dub than Azure's built-in video translation, at a cost the startup 
 | Path | Contents |
 |---|---|
 | `infra/` | Bicep: Foundry account and models, Speech, storage, tracing, budget |
-| `src/` | Pipeline CLI, gates ported from Director, triage agent service (to come) |
+| `src/Trackdub2.Triage/` | PR and CI triage agent on App Service ([setup](src/Trackdub2.Triage/README.md)) |
+| `tests/` | Unit tests |
+| `src/` (more) | Pipeline CLI and gates ported from Director (to come) |
 | `grader/` | Shared Python `grade()` used as Foundry evaluator and RFT grader (to come) |
-| `.github/workflows/` | Image builds and deployment (to come) |
+| `.github/workflows/ci.yml` | Tests and Bicep build on every PR and push to main |
 
 Trackdub (desktop) and Trackdub Director are separate repositories. This one copies ideas and
 gate code from Director; it doesn't depend on either at runtime.

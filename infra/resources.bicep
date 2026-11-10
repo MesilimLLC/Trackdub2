@@ -22,6 +22,8 @@ param judgeCapacity int
 param devClientIp string
 param triageAppRuntime string
 param postgresLocation string
+param githubAppId string
+param triageAllowedRepositories array
 
 var suffix = uniqueString(resourceGroup().id)
 var accountName = 'aif-td2-${suffix}'
@@ -36,6 +38,12 @@ var foundryUserRoleId = '53ca6127-db72-4b80-b1b0-d745d6d5456d' // Foundry User (
 var storageBlobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 var acrPushRoleId = '8311e382-0749-4cb8-b61a-304f252e45ec'
+var keyVaultSecretsOfficerRoleId = 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7'
+var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
+
+var keyVaultName = 'kv-td2-${suffix}'
+var githubPrivateKeySecretName = 'github-app-private-key'
+var githubWebhookSecretName = 'github-webhook-secret'
 
 // Model versions are pinned with auto-upgrade off: a silent model change mid-spike would
 // invalidate comparisons between runs.
@@ -285,6 +293,28 @@ resource registry 'Microsoft.ContainerRegistry/registries@2025-11-01' = {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Key Vault: the triage agent's GitHub App private key and webhook secret
+
+resource keyVault 'Microsoft.KeyVault/vaults@2026-05-15' = {
+  name: keyVaultName
+  location: location
+  tags: tags
+  properties: {
+    tenantId: tenant().tenantId
+    sku: {
+      family: 'A'
+      name: 'standard'
+    }
+    enableRbacAuthorization: true
+    enableSoftDelete: true
+    softDeleteRetentionInDays: 7
+    // Purge protection stays on: a deleted vault or secret can't be destroyed before retention ends.
+    enablePurgeProtection: true
+    publicNetworkAccess: 'Enabled'
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
 // App Service: triage agent host
 
 resource plan 'Microsoft.Web/serverfarms@2024-11-01' = {
@@ -319,20 +349,40 @@ resource triageApp 'Microsoft.Web/sites@2024-11-01' = {
       http20Enabled: true
       // Keeps the webhook endpoint warm so GitHub deliveries don't time out on a cold start.
       alwaysOn: true
-      appSettings: [
-        {
-          name: 'FOUNDRY_PROJECT_ENDPOINT'
-          value: projectEndpoint
-        }
-        {
-          name: 'FOUNDRY_MODEL_DEPLOYMENT'
-          value: modelDeployments[0].name
-        }
-        {
-          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
-          value: appInsights.properties.ConnectionString
-        }
-      ]
+      // Secrets are Key Vault references resolved by the app's managed identity. Until the secrets
+      // exist the reference text passes through, and the app reports GitHub as not configured.
+      appSettings: concat(
+        [
+          {
+            name: 'Triage__ProjectEndpoint'
+            value: projectEndpoint
+          }
+          {
+            name: 'Triage__ModelDeployment'
+            value: modelDeployments[0].name
+          }
+          {
+            name: 'Triage__GitHubAppId'
+            value: githubAppId
+          }
+          {
+            name: 'Triage__GitHubPrivateKey'
+            value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=${githubPrivateKeySecretName})'
+          }
+          {
+            name: 'Triage__GitHubWebhookSecret'
+            value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=${githubWebhookSecretName})'
+          }
+          {
+            name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+            value: appInsights.properties.ConnectionString
+          }
+        ],
+        map(range(0, length(triageAllowedRepositories)), i => {
+          name: 'Triage__AllowedRepositories__${i}'
+          value: triageAllowedRepositories[i]
+        })
+      )
     }
   }
 }
@@ -408,7 +458,28 @@ resource triageAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   }
 }
 
+resource userKeyVaultSecretsOfficer 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, principalId, keyVaultSecretsOfficerRoleId)
+  scope: keyVault
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', keyVaultSecretsOfficerRoleId)
+    principalId: principalId
+    principalType: principalType
+  }
+}
+
+resource triageKeyVaultSecretsUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, triageApp.id, keyVaultSecretsUserRoleId)
+  scope: keyVault
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', keyVaultSecretsUserRoleId)
+    principalId: triageApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 output foundryAccountName string = account.name
+output keyVaultName string = keyVault.name
 output foundryEndpoint string = account.properties.endpoint
 output projectEndpoint string = projectEndpoint
 output storageAccountName string = storage.name

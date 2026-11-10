@@ -27,6 +27,14 @@ param devClientIp string = ''
 @description('Region for PostgreSQL. This subscription has no PostgreSQL Flexible Server offering in eastus (checked 2026-11-10); centralus is the nearest region that has it.')
 param postgresLocation string = 'centralus'
 
+@description('GitHub App ID for the triage agent. Empty until the app is created; the agent stays idle without it.')
+param githubAppId string = ''
+
+@description('Repositories the triage agent may comment on, as owner/name.')
+param triageAllowedRepositories array = [
+  'MesilimLLC/Trackdub2'
+]
+
 @description('App Service runtime for the triage agent.')
 param triageAppRuntime string = 'DOTNETCORE|10.0'
 
@@ -102,6 +110,8 @@ module resources 'resources.bicep' = {
     devClientIp: devClientIp
     triageAppRuntime: triageAppRuntime
     postgresLocation: postgresLocation
+    githubAppId: githubAppId
+    triageAllowedRepositories: triageAllowedRepositories
   }
 }
 
@@ -141,3 +151,4 @@ output postgresHost string = resources.outputs.postgresHost
 output postgresDatabase string = resources.outputs.postgresDatabase
 output registryLoginServer string = resources.outputs.registryLoginServer
 output triageAppHostName string = resources.outputs.triageAppHostName
+output keyVaultName string = resources.outputs.keyVaultName
