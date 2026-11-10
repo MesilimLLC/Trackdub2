@@ -1,0 +1,27 @@
+# Bicep build output
+infra/*.json
+
+# .NET
+bin/
+obj/
+*.user
+
+# Python
+__pycache__/
+.venv/
+
+# Local secrets and environment
+.env
+.env.*
+*.pem
+
+# Media and run output (stored in Azure Blob Storage, not git)
+media/
+runs/
+*.mp4
+*.wav
+
+# Editors
+.vs/
+.vscode/
+.idea/
