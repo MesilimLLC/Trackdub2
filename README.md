@@ -20,6 +20,9 @@ better-timed dub than Azure's built-in video translation, at a cost the startup 
 | `src/` (more) | Pipeline CLI and gates ported from Director (to come) |
 | `grader/` | Shared Python `grade()` used as Foundry evaluator and RFT grader (to come) |
 | `.github/workflows/ci.yml` | Tests and Bicep build on every PR and push to main |
+| `.github/workflows/opencode*.yml` | OpenCode PR review, and the OpenCode bot on comments |
+| `.github/workflows/refactoring-agent.yml` | CodeScene refactoring agent, triggered by `/cs-agent` on a PR |
+| `AGENTS.md`, `.opencode/` | Agent instructions, opencode agents and commands |
 
 Trackdub (desktop) and Trackdub Director are separate repositories. This one copies ideas and
 gate code from Director; it doesn't depend on either at runtime.
