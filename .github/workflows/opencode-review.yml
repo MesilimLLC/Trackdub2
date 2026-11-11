@@ -20,7 +20,7 @@ jobs:
       pull-requests: write
       id-token: write
       actions: read
-    uses: tonythethompson/opencode-review-threads/.github/workflows/opencode-review.yml@v1
+    uses: tonythethompson/opencode-review-threads/.github/workflows/opencode-review.yml@c39a1080723d1a3057d0d9f022c52c7b9076296d # v1
     with:
       models-review: cf:@cf/deepseek-ai/deepseek-v4.1-flash-1017,openrouter:openrouter/free
       models-fix: cf:@cf/deepseek-ai/deepseek-v4.1-flash-1017,cf:@cf/moonshotai/kimi-k2.7-code,cf:@cf/qwen/qwen3.8-27b,openrouter:openrouter/free

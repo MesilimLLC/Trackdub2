@@ -22,7 +22,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.issue.pull_request != null &&
-      startsWith(github.event.comment.body, '/cs-agent') &&
+      (github.event.comment.body == '/cs-agent' || startsWith(github.event.comment.body, '/cs-agent ')) &&
       (contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) ||
        github.event.comment.user.login == 'codescene-access[bot]'))
     runs-on: ubuntu-latest
