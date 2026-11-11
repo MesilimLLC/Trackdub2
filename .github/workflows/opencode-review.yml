@@ -1,0 +1,32 @@
+---
+name: OpenCode review
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+
+concurrency:
+  group: opencode-review-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+      id-token: write
+      actions: read
+    uses: tonythethompson/opencode-review-threads/.github/workflows/opencode-review.yml@c39a1080723d1a3057d0d9f022c52c7b9076296d # v1
+    with:
+      models-review: cf:@cf/deepseek-ai/deepseek-v4.1-flash-1017,openrouter:openrouter/free
+      models-fix: cf:@cf/deepseek-ai/deepseek-v4.1-flash-1017,cf:@cf/moonshotai/kimi-k2.7-code,cf:@cf/qwen/qwen3.8-27b,openrouter:openrouter/free
+    secrets:
+      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CONTEXT7_API_KEY: ${{ secrets.CONTEXT7_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
