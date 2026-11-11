@@ -12,6 +12,11 @@ on:
 
 permissions: {}
 
+# The agent pushes refactor commits; one run per PR at a time avoids racing pushes to the branch.
+concurrency:
+  group: cs-agent-${{ github.event.issue.number || inputs.pr_number }}
+  cancel-in-progress: false
+
 jobs:
   refactor:
     if: >-

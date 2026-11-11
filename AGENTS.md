@@ -43,7 +43,7 @@ PR and CI triage agent. Plan, phases and Go/Stop criteria: the spike plan linked
 ## CodeScene MCP Code Health
 
 Use the CodeScene MCP server tools for Code Health checks. Code Health is authoritative for
-maintainability. Target Code Health 10.0; treat 9+ as not done.
+maintainability. Target Code Health 10.0; anything below 10.0 is not done.
 
 - **Safeguard AI-touched code before every commit:** run `pre_commit_code_health_safeguard` (staged
   files) before committing and `analyze_change_set` (branch vs base) before opening a PR.

@@ -67,7 +67,8 @@ resource. Load `.opencode/context/standards.md` before writing code.
 ## Done means
 
 1. `subagents/validation-gate` reports PASS on every gate.
-2. CodeScene `pre_commit_code_health_safeguard` shows no regression on touched files.
+2. CodeScene `pre_commit_code_health_safeguard` shows no regression on touched files, and touched
+   code files are at Code Health 10.0 (see `AGENTS.md`).
 3. Any Azure change has a clean what-if, and the report says it was not deployed unless the task
    asked for a deployment.
 4. The summary states what was verified and what was not.

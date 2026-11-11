@@ -27,3 +27,9 @@ Run `/validate` before declaring any change done.
 - `context/standards.md` — code, security and infrastructure rules beyond `AGENTS.md`.
 
 Load context on demand; the orchestrator keeps its own prompt lean.
+
+## MCP servers (`opencode.json`)
+
+- `microsoft-learn`: Microsoft and Azure documentation; no credentials.
+- `trackdub-docs-rag`: Trackdub documentation. Needs `DOCS_RAG_TOKEN` in the environment, so it
+  works in local runs only; the GitHub workflows don't pass that secret.
