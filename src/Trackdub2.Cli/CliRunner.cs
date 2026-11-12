@@ -41,11 +41,10 @@ public static class CliRunner
             }
         }
 
+        LoadedQaConfig loaded;
         try
         {
-            LoadedQaConfig loaded = QaConfigLoader.Load(path);
-            WriteEffectiveSettings(path, loaded, output);
-            return ExitOk;
+            loaded = QaConfigLoader.Load(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException
                                        or InvalidDataException or ArgumentException)
@@ -53,6 +52,9 @@ public static class CliRunner
             error.WriteLine($"QA config '{path}' is invalid: {ex.Message}");
             return ExitConfigError;
         }
+
+        WriteEffectiveSettings(path, loaded, output);
+        return ExitOk;
     }
 
     private static void WriteEffectiveSettings(string path, LoadedQaConfig loaded, TextWriter output)

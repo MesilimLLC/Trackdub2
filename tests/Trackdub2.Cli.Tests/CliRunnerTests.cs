@@ -118,6 +118,15 @@ public class CliRunnerTests
     }
 
     [Fact]
+    public void Stdout_failure_after_a_valid_load_is_not_reported_as_an_invalid_config()
+    {
+        using var config = new TempConfig(Valid);
+
+        Assert.Throws<IOException>(() =>
+            CliRunner.Run(["--config", config.FilePath], new FailingWriter(), new StringWriter()));
+    }
+
+    [Fact]
     public void Option_immediately_after_config_is_not_taken_as_the_path()
     {
         var result = Invoke("--config", "--help");
@@ -133,6 +142,13 @@ public class CliRunnerTests
 
         Assert.Equal(CliRunner.ExitOk, result.Exit);
         Assert.Contains("--config", result.Out);
+    }
+
+    private sealed class FailingWriter : TextWriter
+    {
+        public override Encoding Encoding => Encoding.UTF8;
+
+        public override void Write(char value) => throw new IOException("stdout closed");
     }
 
     private sealed class TempConfig : IDisposable

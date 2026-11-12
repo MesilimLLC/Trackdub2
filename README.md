@@ -17,7 +17,8 @@ better-timed dub than Azure's built-in video translation, at a cost the startup 
 | `infra/` | Bicep: Foundry account and models, Speech, storage, tracing, budget |
 | `src/Trackdub2.Triage/` | PR and CI triage agent on App Service ([setup](src/Trackdub2.Triage/README.md)) |
 | `tests/` | Unit tests |
-| `src/` (more) | Pipeline CLI and gates ported from Director (to come) |
+| `src/Trackdub2.Cli/` | `trackdub2` CLI: loads `config/qa-config.json` and prints the effective QA settings and hash. Run from the repo root: `dotnet run --project src/Trackdub2.Cli` (or `--config <path>`) |
+| `src/Trackdub2.Pipeline/` | Gates ported from Director (timing, meaning, loop); translation calls to come |
 | `grader/` | Shared Python `grade()` used as Foundry evaluator and RFT grader (to come) |
 | `.github/workflows/ci.yml` | Tests and Bicep build on every PR and push to main |
 | `.github/workflows/opencode*.yml` | OpenCode PR review, and the OpenCode bot on comments |
