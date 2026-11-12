@@ -21,6 +21,8 @@ public static class QaConfigLoader
 
     private static readonly string[] KnownKeys = [MaxAttemptsKey, ToleranceFractionKey, CharactersPerSecondKey];
 
+    private static readonly byte[] Utf8Bom = [0xEF, 0xBB, 0xBF];
+
     public static LoadedQaConfig Load(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -31,7 +33,8 @@ public static class QaConfigLoader
     {
         ArgumentNullException.ThrowIfNull(utf8Json);
 
-        using JsonDocument document = JsonDocument.Parse(utf8Json);
+        int start = utf8Json.AsSpan().StartsWith(Utf8Bom) ? Utf8Bom.Length : 0;
+        using JsonDocument document = JsonDocument.Parse(utf8Json.AsMemory(start));
         JsonElement root = document.RootElement;
         if (root.ValueKind != JsonValueKind.Object)
         {

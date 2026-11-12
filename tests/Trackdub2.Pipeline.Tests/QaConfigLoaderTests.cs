@@ -32,6 +32,17 @@ public class QaConfigLoaderTests
     }
 
     [Fact]
+    public void Utf8_byte_order_mark_is_accepted_and_still_hashed_as_file_bytes()
+    {
+        byte[] withBom = [0xEF, 0xBB, 0xBF, .. Utf8(Valid)];
+
+        LoadedQaConfig loaded = QaConfigLoader.Parse(withBom);
+
+        Assert.Equal(3, loaded.Options.MaxAttempts);
+        Assert.Equal(Convert.ToHexString(SHA256.HashData(withBom)).ToLowerInvariant(), loaded.Sha256);
+    }
+
+    [Fact]
     public void Committed_config_matches_the_built_in_defaults()
     {
         string path = Path.Combine(RepoRoot(), "config", "qa-config.json");
