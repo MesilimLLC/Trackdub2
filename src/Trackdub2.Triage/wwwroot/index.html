@@ -9,102 +9,135 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
+  <a class="skip-link" href="#detail">Skip to delivery detail</a>
   <div class="app">
-    <header class="app-header">
-      <div class="app-header-inner">
-        <div class="brand">
-          <h1 class="brand-title">Trackdub2 Triage</h1>
-          <p class="brand-sub">GitHub App webhook — one triage comment per PR or failed run</p>
-        </div>
-        <div class="header-meta">
-          <div class="pill" title="Foundry model deployment">
-            <span class="pill-label">Model</span>
-            <span class="pill-value">gpt-6-luna</span>
-          </div>
-          <div class="pill" id="pill-github">
-            <span class="pill-label">GitHub App</span>
-            <span class="pill-value" id="pill-github-value">…</span>
-          </div>
-          <div class="pill" id="pill-health">
-            <span class="pill-label">Health</span>
-            <span class="pill-value" id="pill-health-value">…</span>
-          </div>
-        </div>
-        <div class="qa-summary" aria-label="Delivery summary">
-          <div class="qa-stat"><span class="qa-stat-label">Deliveries</span><span class="qa-stat-value" id="stat-total">—</span></div>
-          <div class="qa-stat"><span class="qa-stat-label">Commented</span><span class="qa-stat-value qa-stat-final" id="stat-commented">—</span></div>
-          <div class="qa-stat"><span class="qa-stat-label">Skipped</span><span class="qa-stat-value" id="stat-skipped">—</span></div>
-          <div class="qa-stat">
-            <span class="qa-stat-label">Agent calls</span>
-            <span class="qa-stat-value" id="stat-budget">—</span>
-            <span class="qa-stat-detail">this hour</span>
-          </div>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">T2</span>
+        <div>
+          <h1 class="brand-title">Triage</h1>
+          <p class="brand-sub">MesilimLLC/Trackdub2</p>
         </div>
       </div>
-      <div id="banners" aria-live="polite"></div>
+
+      <dl class="status-row" aria-label="Service status">
+        <div class="status-chip" id="chip-health"><dt>Service</dt><dd><span class="dot" aria-hidden="true"></span><span id="chip-health-value">Checking</span></dd></div>
+        <div class="status-chip" id="chip-github"><dt>GitHub App</dt><dd><span class="dot" aria-hidden="true"></span><span id="chip-github-value">Checking</span></dd></div>
+        <div class="status-chip"><dt>Model</dt><dd class="mono" id="chip-model">gpt-6-luna</dd></div>
+        <div class="status-chip budget-chip">
+          <dt>Agent calls this hour</dt>
+          <dd>
+            <span class="mono" id="budget-text">—</span>
+            <span class="meter" aria-hidden="true"><span class="meter-fill" id="budget-fill"></span></span>
+          </dd>
+        </div>
+      </dl>
+
+      <button type="button" class="btn btn-ghost" id="open-settings" aria-haspopup="dialog">Settings</button>
     </header>
 
-    <main class="main">
-      <div class="toolbar">
-        <div class="toolbar-left">
-          <button type="button" class="btn btn-primary" data-stage="replay">Replay delivery</button>
-          <button type="button" class="btn btn-primary" data-stage="rerun">Re-run triage</button>
-          <button type="button" class="btn btn-primary" data-stage="ping">Send test ping</button>
-          <span class="toolbar-hint" id="toolbar-hint">MesilimLLC/Trackdub2 · pull_request, workflow_run</span>
+    <section class="setup" id="setup" aria-labelledby="setup-heading" hidden>
+      <div class="setup-head">
+        <div>
+          <h2 id="setup-heading">Finish setup</h2>
+          <p class="setup-sub">The service is running. Comments start once GitHub can reach it.</p>
         </div>
-        <div class="toolbar-right">
-          <div class="segmented" role="group" aria-label="Filter deliveries">
-            <button type="button" class="seg-btn is-active" data-filter="all" aria-pressed="true">All</button>
-            <button type="button" class="seg-btn" data-filter="commented" aria-pressed="false">Commented</button>
-            <button type="button" class="seg-btn" data-filter="skipped" aria-pressed="false">Skipped</button>
-            <button type="button" class="seg-btn" data-filter="attention" aria-pressed="false">Needs review</button>
+        <span class="setup-progress" id="setup-progress">1 of 3 done</span>
+      </div>
+      <ol class="setup-steps">
+        <li class="setup-step" data-step="service">
+          <span class="step-mark" aria-hidden="true"></span>
+          <div class="step-body">
+            <h3>Service running</h3>
+            <p><code>GET /healthz</code> answers.</p>
           </div>
-          <button type="button" class="btn" id="btn-sample">Load sample</button>
+        </li>
+        <li class="setup-step" data-step="github">
+          <span class="step-mark" aria-hidden="true"></span>
+          <div class="step-body">
+            <h3>Add GitHub App credentials</h3>
+            <p>Set <code>Triage__GitHubAppId</code>, <code>Triage__GitHubPrivateKey</code> and <code>Triage__WebhookSecret</code>, then restart.</p>
+          </div>
+          <button type="button" class="btn btn-small" data-copy="Triage__GitHubAppId=&#10;Triage__GitHubPrivateKey=&#10;Triage__WebhookSecret=">Copy variables</button>
+        </li>
+        <li class="setup-step" data-step="ping">
+          <span class="step-mark" aria-hidden="true"></span>
+          <div class="step-body">
+            <h3>Check the webhook</h3>
+            <p>Send a ping to <code>POST /github/webhook</code>. A 200 means GitHub deliveries will work.</p>
+          </div>
+          <button type="button" class="btn btn-small btn-primary" data-action="ping">Send test ping</button>
+        </li>
+      </ol>
+    </section>
+
+    <main class="workspace">
+      <section class="inbox" aria-labelledby="inbox-heading">
+        <div class="inbox-head">
+          <div class="inbox-title">
+            <h2 id="inbox-heading">Deliveries</h2>
+            <span class="sample-tag" title="Not recorded by the service yet">Sample data</span>
+          </div>
+          <label class="search">
+            <span class="sr-only">Search deliveries</span>
+            <input type="search" id="search" placeholder="Search title, author, event" autocomplete="off" spellcheck="false" />
+            <kbd aria-hidden="true">/</kbd>
+          </label>
+          <div class="tabs" role="tablist" aria-label="Filter deliveries">
+            <button type="button" role="tab" class="tab is-active" data-filter="all" aria-selected="true">All <span class="count"></span></button>
+            <button type="button" role="tab" class="tab" data-filter="attention" aria-selected="false">Needs review <span class="count"></span></button>
+            <button type="button" role="tab" class="tab" data-filter="commented" aria-selected="false">Commented <span class="count"></span></button>
+            <button type="button" role="tab" class="tab" data-filter="skipped" aria-selected="false">Skipped <span class="count"></span></button>
+          </div>
         </div>
+        <ul class="inbox-list" id="inbox-list" aria-label="Deliveries" tabindex="0"></ul>
+        <p class="inbox-empty" id="inbox-empty" hidden>No deliveries match.</p>
+        <p class="inbox-hint"><kbd>J</kbd> <kbd>K</kbd> to move, <kbd>/</kbd> to search</p>
+      </section>
+
+      <section class="detail" id="detail" aria-live="polite" tabindex="-1"></section>
+    </main>
+  </div>
+
+  <dialog class="sheet" id="settings" aria-labelledby="settings-heading">
+    <form method="dialog" class="sheet-inner">
+      <header class="sheet-head">
+        <h2 id="settings-heading">Settings</h2>
+        <button type="submit" class="btn btn-ghost btn-small" aria-label="Close settings">Close</button>
+      </header>
+
+      <div class="sheet-section">
+        <h3>Scope</h3>
+        <label class="field">Allowed repositories
+          <input type="text" id="set-repos" value="MesilimLLC/Trackdub2" spellcheck="false" />
+          <small>Comma-separated. Deliveries from other repositories are dropped.</small>
+        </label>
+        <label class="toggle"><input type="checkbox" id="set-drafts" checked /> <span>Skip draft pull requests</span></label>
+        <label class="toggle"><input type="checkbox" id="set-bots" checked /> <span>Skip bot authors</span></label>
       </div>
 
-      <section class="workbench-panel" aria-labelledby="settings-heading">
-        <div class="panel-heading">
-          <h2 id="settings-heading">Run settings</h2>
-          <span class="estimate-line" id="settings-estimate"></span>
-        </div>
-        <div class="workbench-grid">
-          <label>Allowed repositories
-            <input type="text" id="set-repos" value="MesilimLLC/Trackdub2" spellcheck="false" />
-            <small>Comma-separated. Others are dropped.</small>
-          </label>
-          <label>Max agent calls / hour
-            <input type="number" id="set-budget" value="30" min="1" max="500" />
-            <small>Deliveries over the cap read as not evaluated.</small>
-          </label>
-          <label>Model deployment
-            <select id="set-model">
-              <option>gpt-6-luna</option>
-              <option>gpt-6-luna-mini</option>
-            </select>
-            <small>Foundry project deployment.</small>
-          </label>
-          <label class="check-field"><span><input type="checkbox" id="set-drafts" checked /> Skip draft PRs</span></label>
-          <label class="check-field"><span><input type="checkbox" id="set-bots" checked /> Skip bot authors</span></label>
-        </div>
-      </section>
+      <div class="sheet-section">
+        <h3>Agent</h3>
+        <label class="field">Model deployment
+          <select id="set-model">
+            <option>gpt-6-luna</option>
+            <option>gpt-6-luna-mini</option>
+          </select>
+        </label>
+        <label class="field">Max agent calls per hour
+          <input type="number" id="set-budget" value="30" min="1" max="500" />
+          <small>Deliveries over the cap are marked not evaluated so you can review them.</small>
+        </label>
+      </div>
 
-      <div class="lines" role="list" id="lines"></div>
-      <p class="empty-state" id="empty-state" hidden>No deliveries match this filter.</p>
+      <div class="sheet-section">
+        <h3>Health</h3>
+        <pre class="code" id="health-json">loading…</pre>
+        <small class="muted">Live from <a href="/healthz">/healthz</a>, refreshed every 15 seconds. These settings are not saved yet.</small>
+      </div>
+    </form>
+  </dialog>
 
-      <section class="report-footer" aria-labelledby="report-heading">
-        <h2 id="report-heading">Health report</h2>
-        <pre class="report-json" id="report-json">loading…</pre>
-        <p class="report-note">Live from <code>GET /healthz</code>. Deliveries above are sample data until the service records them.</p>
-      </section>
-    </main>
-
-    <footer class="app-footer">
-      <span>Trackdub2 Triage · ASP.NET Core webhook, static console</span>
-      <span class="footer-sep">·</span>
-      <a href="/healthz">/healthz</a>
-    </footer>
-  </div>
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <script src="/app.js" defer></script>
 </body>
