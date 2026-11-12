@@ -188,7 +188,7 @@ public static class MeaningGate
     }
 
     /// <summary>
-    /// Extracts the first balanced JSON object from prose. String literals and escapes are tracked so a brace
+    /// Returns the index just past the brace that closes the object at start. String literals and escapes are tracked so a brace
     /// inside a string value, or a stray brace in trailing prose, cannot change where the object ends.
     /// </summary>
     private static int FindObjectEnd(string content, int start)
