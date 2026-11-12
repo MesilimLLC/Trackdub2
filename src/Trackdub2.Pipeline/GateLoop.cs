@@ -33,7 +33,11 @@ public static class GateLoop
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(initialTranslation);
-        ArgumentOutOfRangeException.ThrowIfNegative(windowSeconds);
+        if (!double.IsFinite(windowSeconds) || windowSeconds < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(windowSeconds), "Must be finite and zero or more.");
+        }
+
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(reviseForTiming);
         ArgumentNullException.ThrowIfNull(checkMeaning);
@@ -61,6 +65,7 @@ public static class GateLoop
         {
             cancellationToken.ThrowIfCancellationRequested();
             current = await reviseForTiming(current, lastMeaningIssues, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
 
             GateAttempt attempt = await EvaluateAsync(1 + revision, current, windowSeconds, options, checkMeaning, cancellationToken).ConfigureAwait(false);
             attempts.Add(attempt);
@@ -109,6 +114,11 @@ public static class GateLoop
             meaning = MeaningGate.ForError(ex.Message);
         }
 
-        return new GateAttempt(number, translation, estimate, true, meaning.Verdict, meaning.Issues);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        MeaningVerdict verdict = meaning.Verdict == MeaningVerdict.Pass && meaning.Issues.Length > 0
+            ? MeaningVerdict.Fail
+            : meaning.Verdict;
+        return new GateAttempt(number, translation, estimate, true, verdict, meaning.Issues);
     }
 }

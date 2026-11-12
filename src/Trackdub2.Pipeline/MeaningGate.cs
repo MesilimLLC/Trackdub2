@@ -80,7 +80,14 @@ public static class MeaningGate
     public static MeaningCheckResult ParseAndNormalize(string rawContent)
     {
         string content = rawContent.Trim();
-        string jsonCandidate = ExtractJsonObject(content) ?? content;
+        int start = content.IndexOf('{');
+        int end = start < 0 ? -1 : FindObjectEnd(content, start);
+        if (end >= 0 && content.IndexOf('{', end) >= 0)
+        {
+            return FailClosed(rawContent, "ambiguous meaning response: more than one JSON object");
+        }
+
+        string jsonCandidate = end < 0 ? content : content[start..end];
 
         try
         {
@@ -99,9 +106,14 @@ public static class MeaningGate
         }
         catch (JsonException)
         {
-            string explanation = $"Unparseable meaning response; failing closed. Raw: {Truncate(rawContent, 300)}";
-            return new MeaningCheckResult(MeaningVerdict.Fail, ["unparseable meaning response"], explanation);
+            return FailClosed(rawContent, "unparseable meaning response");
         }
+    }
+
+    private static MeaningCheckResult FailClosed(string rawContent, string issue)
+    {
+        string explanation = $"Unparseable meaning response; failing closed. Raw: {Truncate(rawContent, 300)}";
+        return new MeaningCheckResult(MeaningVerdict.Fail, [issue], explanation);
     }
 
     /// <summary>
@@ -149,7 +161,7 @@ public static class MeaningGate
     {
         if (!root.TryGetProperty("issues", out JsonElement issues))
         {
-            return [];
+            throw new JsonException("Meaning response must include 'issues'.");
         }
 
         if (issues.ValueKind != JsonValueKind.Array)
@@ -179,18 +191,6 @@ public static class MeaningGate
     /// Extracts the first balanced JSON object from prose. String literals and escapes are tracked so a brace
     /// inside a string value, or a stray brace in trailing prose, cannot change where the object ends.
     /// </summary>
-    private static string? ExtractJsonObject(string content)
-    {
-        int start = content.IndexOf('{');
-        if (start < 0)
-        {
-            return null;
-        }
-
-        int end = FindObjectEnd(content, start);
-        return end < 0 ? null : content[start..end];
-    }
-
     private static int FindObjectEnd(string content, int start)
     {
         int depth = 0;
