@@ -33,10 +33,12 @@ public static class GateLoop
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(initialTranslation);
+        ArgumentOutOfRangeException.ThrowIfNegative(windowSeconds);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(reviseForTiming);
         ArgumentNullException.ThrowIfNull(checkMeaning);
         options.Validate();
+        cancellationToken.ThrowIfCancellationRequested();
 
         var attempts = new List<GateAttempt>();
         string current = initialTranslation;
@@ -102,7 +104,7 @@ public static class GateLoop
         {
             meaning = await checkMeaning(translation, cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {
             meaning = MeaningGate.ForError(ex.Message);
         }

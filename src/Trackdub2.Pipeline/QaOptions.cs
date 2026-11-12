@@ -19,14 +19,14 @@ public sealed record QaOptions
             throw new ArgumentOutOfRangeException(nameof(MaxAttempts), "Must be zero or more.");
         }
 
-        if (ToleranceFraction < 0)
+        if (!double.IsFinite(ToleranceFraction) || ToleranceFraction < 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(ToleranceFraction), "Must be zero or more.");
+            throw new ArgumentOutOfRangeException(nameof(ToleranceFraction), "Must be finite and zero or more.");
         }
 
-        if (CharactersPerSecond <= 0)
+        if (!double.IsFinite(CharactersPerSecond) || CharactersPerSecond <= 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(CharactersPerSecond), "Must be positive.");
+            throw new ArgumentOutOfRangeException(nameof(CharactersPerSecond), "Must be finite and positive.");
         }
     }
 }

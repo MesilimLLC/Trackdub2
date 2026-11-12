@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Trackdub2.Pipeline;
 
@@ -55,15 +56,22 @@ public static class MeaningGate
         {
             $"SOURCE ({sourceLanguage}):",
             "<source_text>",
-            sourceText,
+            DefuseClosingTag(sourceText, "source_text"),
             "</source_text>",
             $"CANDIDATE ({targetLanguage}):",
             "<candidate_translation>",
-            candidateTranslation,
+            DefuseClosingTag(candidateTranslation, "candidate_translation"),
             "</candidate_translation>",
             "Judge material meaning as specified and return the JSON object only.",
         });
     }
+
+    /// <summary>
+    /// Stops text from closing its own delimiter block, so the candidate cannot end the data section early
+    /// and place instructions outside it.
+    /// </summary>
+    private static string DefuseClosingTag(string text, string tag) =>
+        Regex.Replace(text, @"<\s*/\s*" + Regex.Escape(tag) + @"\s*>", "[/" + tag + "]", RegexOptions.IgnoreCase);
 
     /// <summary>
     /// Parses the judge's reply. A pass that lists material issues becomes a fail. Anything that cannot be
