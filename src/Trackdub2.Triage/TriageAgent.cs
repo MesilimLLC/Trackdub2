@@ -18,17 +18,28 @@ public sealed class TriageAgent
         Use GitHub Markdown. Stay under 200 words. When the evidence is insufficient, say so instead of guessing. Do not praise the change.
         """;
 
-    private readonly AIAgent _agent;
+    // Created on first use so the host and /healthz still start before the Foundry endpoint is configured.
+    private readonly Lazy<AIAgent> _agent;
 
     public TriageAgent(TriageOptions options, TokenCredential credential)
     {
-        _agent = new AIProjectClient(new Uri(options.ProjectEndpoint), credential)
-            .AsAIAgent(model: options.ModelDeployment, instructions: Instructions, name: "Trackdub2Triage");
+        _agent = new Lazy<AIAgent>(() => Create(options, credential));
     }
 
     public async Task<string> RunAsync(string prompt, CancellationToken ct)
     {
-        AgentResponse response = await _agent.RunAsync(prompt, cancellationToken: ct);
+        AgentResponse response = await _agent.Value.RunAsync(prompt, cancellationToken: ct);
         return response.Text;
+    }
+
+    private static AIAgent Create(TriageOptions options, TokenCredential credential)
+    {
+        if (!Uri.TryCreate(options.ProjectEndpoint, UriKind.Absolute, out Uri? endpoint))
+        {
+            throw new InvalidOperationException("Triage:ProjectEndpoint is not set to an absolute URI.");
+        }
+
+        return new AIProjectClient(endpoint, credential)
+            .AsAIAgent(model: options.ModelDeployment, instructions: Instructions, name: "Trackdub2Triage");
     }
 }
