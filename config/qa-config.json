@@ -1,0 +1,5 @@
+{
+  "maxAttempts": 3,
+  "toleranceFraction": 0.1,
+  "charactersPerSecond": 15
+}
