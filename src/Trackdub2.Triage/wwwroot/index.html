@@ -1,338 +1,111 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b0c0f">
-  <title>Trackdub 2 · Console</title>
-  <meta name="description" content="Operations console for Trackdub 2: PR and CI triage, and the gated English to Spanish dubbing pipeline.">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0f1216" />
+  <meta name="description" content="Trackdub2 Triage: review webhook deliveries and the triage comments posted on pull requests and failed CI runs." />
+  <title>Trackdub2 Triage</title>
+  <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to content</a>
-  <div class="shell">
-    <aside class="sidebar" aria-label="Primary">
-      <div class="brand">
-        <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 11v2"/></svg>
-        </span>
-        <span class="brand-text">
-          <span class="brand-name">Trackdub 2</span>
-          <span class="brand-sub">Console</span>
-        </span>
-      </div>
-
-      <nav class="nav">
-        <p class="nav-label">Workspace</p>
-        <a href="#overview" class="nav-link" data-route="overview">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
-          Overview
-        </a>
-        <a href="#triage" class="nav-link" data-route="triage">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M6 8.5v7M18 15.5V10a3 3 0 0 0-3-3h-4"/><path d="m13 5-2 2 2 2"/></svg>
-          Triage
-          <span class="nav-count" id="nav-triage-count">0</span>
-        </a>
-        <a href="#dubbing" class="nav-link" data-route="dubbing">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3"/></svg>
-          Dubbing
-          <span class="nav-tag">Spike</span>
-        </a>
-        <p class="nav-label">Configure</p>
-        <a href="#setup" class="nav-link" data-route="setup">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>
-          Setup
-        </a>
-        <a href="#settings" class="nav-link" data-route="settings">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
-          Settings
-        </a>
-      </nav>
-
-      <div class="sidebar-foot">
-        <div class="env-card">
-          <div class="env-row">
-            <span class="status-dot" id="side-dot" aria-hidden="true"></span>
-            <span id="side-status">Checking service…</span>
+  <div class="app">
+    <header class="app-header">
+      <div class="app-header-inner">
+        <div class="brand">
+          <h1 class="brand-title">Trackdub2 Triage</h1>
+          <p class="brand-sub">GitHub App webhook — one triage comment per PR or failed run</p>
+        </div>
+        <div class="header-meta">
+          <div class="pill" title="Foundry model deployment">
+            <span class="pill-label">Model</span>
+            <span class="pill-value">gpt-6-luna</span>
           </div>
-          <p class="env-meta mono">app-td2-triage · eastus</p>
+          <div class="pill" id="pill-github">
+            <span class="pill-label">GitHub App</span>
+            <span class="pill-value" id="pill-github-value">…</span>
+          </div>
+          <div class="pill" id="pill-health">
+            <span class="pill-label">Health</span>
+            <span class="pill-value" id="pill-health-value">…</span>
+          </div>
+        </div>
+        <div class="qa-summary" aria-label="Delivery summary">
+          <div class="qa-stat"><span class="qa-stat-label">Deliveries</span><span class="qa-stat-value" id="stat-total">—</span></div>
+          <div class="qa-stat"><span class="qa-stat-label">Commented</span><span class="qa-stat-value qa-stat-final" id="stat-commented">—</span></div>
+          <div class="qa-stat"><span class="qa-stat-label">Skipped</span><span class="qa-stat-value" id="stat-skipped">—</span></div>
+          <div class="qa-stat">
+            <span class="qa-stat-label">Agent calls</span>
+            <span class="qa-stat-value" id="stat-budget">—</span>
+            <span class="qa-stat-detail">this hour</span>
+          </div>
         </div>
       </div>
-    </aside>
+      <div id="banners" aria-live="polite"></div>
+    </header>
 
-    <div class="content">
-      <header class="topbar">
-        <button class="icon-btn menu-btn" id="menu-btn" aria-label="Open navigation" aria-expanded="false">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
-        </button>
-        <div class="crumbs">
-          <span class="crumb-muted">MesilimLLC / Trackdub2</span>
-          <span class="crumb-sep" aria-hidden="true">/</span>
-          <span id="crumb-current">Overview</span>
+    <main class="main">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <button type="button" class="btn btn-primary" data-stage="replay">Replay delivery</button>
+          <button type="button" class="btn btn-primary" data-stage="rerun">Re-run triage</button>
+          <button type="button" class="btn btn-primary" data-stage="ping">Send test ping</button>
+          <span class="toolbar-hint" id="toolbar-hint">MesilimLLC/Trackdub2 · pull_request, workflow_run</span>
         </div>
-        <div class="topbar-actions">
-          <button class="search-btn" id="cmd-btn" aria-label="Search (press slash)">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-            <span>Search</span>
-            <kbd>/</kbd>
-          </button>
-          <a class="btn btn-ghost" href="https://github.com/MesilimLLC/Trackdub2" target="_blank" rel="noopener noreferrer">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 19c-4 1.5-4-2-6-2.5m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg>
-            Repository
-          </a>
+        <div class="toolbar-right">
+          <div class="segmented" role="group" aria-label="Filter deliveries">
+            <button type="button" class="seg-btn is-active" data-filter="all" aria-pressed="true">All</button>
+            <button type="button" class="seg-btn" data-filter="commented" aria-pressed="false">Commented</button>
+            <button type="button" class="seg-btn" data-filter="skipped" aria-pressed="false">Skipped</button>
+            <button type="button" class="seg-btn" data-filter="attention" aria-pressed="false">Needs review</button>
+          </div>
+          <button type="button" class="btn" id="btn-sample">Load sample</button>
         </div>
-      </header>
+      </div>
 
-      <main id="main" tabindex="-1">
-        <!-- Overview -->
-        <section class="view" data-view="overview" aria-labelledby="h-overview">
-          <div class="page-head">
-            <div>
-              <p class="eyebrow">Overview</p>
-              <h1 id="h-overview">Everything the agents did, at a glance</h1>
-              <p class="lede">Triage comments on pull requests and failed CI runs, and the gated dubbing spike. Figures marked <span class="sample-chip">Sample</span> are placeholders until the service reports them.</p>
-            </div>
-            <div class="health-pill" id="health-pill" role="status" aria-live="polite">
-              <span class="status-dot" aria-hidden="true"></span>
-              <span class="health-text">Checking /healthz…</span>
-            </div>
-          </div>
+      <section class="workbench-panel" aria-labelledby="settings-heading">
+        <div class="panel-heading">
+          <h2 id="settings-heading">Run settings</h2>
+          <span class="estimate-line" id="settings-estimate"></span>
+        </div>
+        <div class="workbench-grid">
+          <label>Allowed repositories
+            <input type="text" id="set-repos" value="MesilimLLC/Trackdub2" spellcheck="false" />
+            <small>Comma-separated. Others are dropped.</small>
+          </label>
+          <label>Max agent calls / hour
+            <input type="number" id="set-budget" value="30" min="1" max="500" />
+            <small>Deliveries over the cap read as not evaluated.</small>
+          </label>
+          <label>Model deployment
+            <select id="set-model">
+              <option>gpt-6-luna</option>
+              <option>gpt-6-luna-mini</option>
+            </select>
+            <small>Foundry project deployment.</small>
+          </label>
+          <label class="check-field"><span><input type="checkbox" id="set-drafts" checked /> Skip draft PRs</span></label>
+          <label class="check-field"><span><input type="checkbox" id="set-bots" checked /> Skip bot authors</span></label>
+        </div>
+      </section>
 
-          <div class="banner" id="setup-banner" hidden>
-            <div class="banner-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
-            </div>
-            <div class="banner-body">
-              <p class="banner-title">GitHub App isn&apos;t connected yet</p>
-              <p class="banner-text">Webhooks answer 503 until the App ID, private key and webhook secret resolve. Finish the remaining setup steps to start triaging.</p>
-            </div>
-            <a href="#setup" class="btn btn-primary">Continue setup</a>
-          </div>
+      <div class="lines" role="list" id="lines"></div>
+      <p class="empty-state" id="empty-state" hidden>No deliveries match this filter.</p>
 
-          <div class="stats">
-            <article class="stat">
-              <div class="stat-head"><span>Agent calls this hour</span><span class="sample-chip">Sample</span></div>
-              <div class="stat-value"><span id="budget-used">12</span><span class="stat-unit">/ <span id="budget-max">30</span></span></div>
-              <div class="meter" role="meter" aria-label="Hourly agent call budget" aria-valuemin="0" aria-valuemax="30" aria-valuenow="12" id="budget-meter"><span style="width:40%"></span></div>
-              <p class="stat-foot">Resets in <span class="mono">23m</span></p>
-            </article>
-            <article class="stat">
-              <div class="stat-head"><span>Comments posted · 24h</span><span class="sample-chip">Sample</span></div>
-              <div class="stat-value">47</div>
-              <svg class="spark" viewBox="0 0 120 32" preserveAspectRatio="none" aria-hidden="true"><path d="M0 26 L10 22 L20 24 L30 18 L40 20 L50 12 L60 16 L70 10 L80 14 L90 6 L100 9 L110 4 L120 7"/></svg>
-              <p class="stat-foot"><span class="up">+18%</span> vs previous day</p>
-            </article>
-            <article class="stat">
-              <div class="stat-head"><span>Median time to comment</span><span class="sample-chip">Sample</span></div>
-              <div class="stat-value">38<span class="stat-unit">s</span></div>
-              <svg class="spark" viewBox="0 0 120 32" preserveAspectRatio="none" aria-hidden="true"><path d="M0 12 L10 14 L20 10 L30 16 L40 13 L50 18 L60 15 L70 20 L80 17 L90 22 L100 19 L110 24 L120 22"/></svg>
-              <p class="stat-foot">Webhook ack <span class="mono">&lt; 120ms</span></p>
-            </article>
-            <article class="stat">
-              <div class="stat-head"><span>Queue depth</span><span class="sample-chip">Sample</span></div>
-              <div class="stat-value">0</div>
-              <div class="queue-bars" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
-              <p class="stat-foot">Nothing waiting</p>
-            </article>
-          </div>
+      <section class="report-footer" aria-labelledby="report-heading">
+        <h2 id="report-heading">Health report</h2>
+        <pre class="report-json" id="report-json">loading…</pre>
+        <p class="report-note">Live from <code>GET /healthz</code>. Deliveries above are sample data until the service records them.</p>
+      </section>
+    </main>
 
-          <div class="grid-2">
-            <section class="panel" aria-labelledby="h-recent">
-              <div class="panel-head">
-                <h2 id="h-recent">Recent triage</h2>
-                <a href="#triage" class="link">View all</a>
-              </div>
-              <ul class="activity" id="recent-list"></ul>
-            </section>
-
-            <section class="panel" aria-labelledby="h-progress">
-              <div class="panel-head">
-                <h2 id="h-progress">Setup progress</h2>
-                <span class="mono muted" id="progress-count">0 / 6</span>
-              </div>
-              <div class="progress-ring-wrap">
-                <svg class="progress-ring" viewBox="0 0 80 80" aria-hidden="true">
-                  <circle cx="40" cy="40" r="34" class="ring-track"/>
-                  <circle cx="40" cy="40" r="34" class="ring-fill" id="ring-fill"/>
-                </svg>
-                <div>
-                  <p class="ring-title" id="ring-title">Almost there</p>
-                  <p class="muted small">Infrastructure is deployed. The GitHub App needs an org owner to finish.</p>
-                </div>
-              </div>
-              <ol class="mini-steps" id="mini-steps"></ol>
-            </section>
-          </div>
-
-          <section class="panel" aria-labelledby="h-pipeline">
-            <div class="panel-head">
-              <h2 id="h-pipeline">Dubbing pipeline</h2>
-              <a href="#dubbing" class="link">Open runs</a>
-            </div>
-            <div class="pipeline" id="pipeline-overview"></div>
-          </section>
-        </section>
-
-        <!-- Triage -->
-        <section class="view" data-view="triage" aria-labelledby="h-triage" hidden>
-          <div class="page-head">
-            <div>
-              <p class="eyebrow">Triage</p>
-              <h1 id="h-triage">Pull requests and CI runs</h1>
-              <p class="lede">One comment per PR or failed workflow, edited in place on new pushes. Select a row to preview what the agent wrote.</p>
-            </div>
-          </div>
-
-          <div class="toolbar">
-            <div class="segmented" role="tablist" aria-label="Filter by type">
-              <button role="tab" aria-selected="true" data-filter="all">All</button>
-              <button role="tab" aria-selected="false" data-filter="pr">Pull requests</button>
-              <button role="tab" aria-selected="false" data-filter="ci">CI failures</button>
-            </div>
-            <label class="field">
-              <span class="sr-only">Search triage</span>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-              <input type="search" id="triage-search" placeholder="Search title, author or number">
-            </label>
-          </div>
-
-          <div class="table-wrap panel flush">
-            <table class="table">
-              <thead>
-                <tr>
-                  <th scope="col">Item</th>
-                  <th scope="col">Type</th>
-                  <th scope="col">Verdict</th>
-                  <th scope="col">Author</th>
-                  <th scope="col" class="num">Tokens</th>
-                  <th scope="col" class="num">When</th>
-                </tr>
-              </thead>
-              <tbody id="triage-body"></tbody>
-            </table>
-            <p class="empty" id="triage-empty" hidden>No items match that filter.</p>
-          </div>
-        </section>
-
-        <!-- Dubbing -->
-        <section class="view" data-view="dubbing" aria-labelledby="h-dubbing" hidden>
-          <div class="page-head">
-            <div>
-              <p class="eyebrow">Dubbing spike</p>
-              <h1 id="h-dubbing">English → Spanish, gated</h1>
-              <p class="lede">An orchestrator plans each line and picks repairs. Timing, meaning and measured-audio gates verify every result; the agent has no path around them.</p>
-            </div>
-            <button class="btn btn-primary" id="new-run-btn">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-              New run
-            </button>
-          </div>
-
-          <div class="compare panel">
-            <div class="compare-head">
-              <h2>Spike question</h2>
-              <p class="muted">Does the gated pipeline produce a better-timed dub than Azure video translation, at a cost the credits can carry?</p>
-            </div>
-            <div class="compare-grid">
-              <div class="compare-col">
-                <p class="compare-label">Trackdub 2 pipeline <span class="sample-chip">Sample</span></p>
-                <div class="compare-metric"><span>Lines within timing gate</span><strong>96.4%</strong></div>
-                <div class="bar"><span class="bar-accent" style="width:96.4%"></span></div>
-                <div class="compare-metric"><span>Cost per minute</span><strong>$0.41</strong></div>
-              </div>
-              <div class="compare-col">
-                <p class="compare-label">Azure video translation <span class="sample-chip">Sample</span></p>
-                <div class="compare-metric"><span>Lines within timing gate</span><strong>81.2%</strong></div>
-                <div class="bar"><span class="bar-muted" style="width:81.2%"></span></div>
-                <div class="compare-metric"><span>Cost per minute</span><strong>$0.50</strong></div>
-              </div>
-            </div>
-          </div>
-
-          <div class="runs" id="runs"></div>
-        </section>
-
-        <!-- Setup -->
-        <section class="view" data-view="setup" aria-labelledby="h-setup" hidden>
-          <div class="page-head">
-            <div>
-              <p class="eyebrow">Setup</p>
-              <h1 id="h-setup">Connect the GitHub App</h1>
-              <p class="lede">These steps need an organization owner in a browser. Secrets stay in Key Vault; nothing here stores them.</p>
-            </div>
-            <button class="btn btn-ghost" id="recheck-btn">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
-              Re-check health
-            </button>
-          </div>
-
-          <ol class="steps" id="steps"></ol>
-        </section>
-
-        <!-- Settings -->
-        <section class="view" data-view="settings" aria-labelledby="h-settings" hidden>
-          <div class="page-head">
-            <div>
-              <p class="eyebrow">Settings</p>
-              <h1 id="h-settings">Service configuration</h1>
-              <p class="lede">Read-only. Bicep is the source of truth; change values in <span class="mono">infra/main.bicep</span> and redeploy.</p>
-            </div>
-          </div>
-
-          <div class="grid-2">
-            <section class="panel" aria-labelledby="h-agent">
-              <div class="panel-head"><h2 id="h-agent">Agent</h2></div>
-              <dl class="kv">
-                <div><dt>Model deployment</dt><dd class="mono">gpt-6-luna</dd></div>
-                <div><dt>Foundry project</dt><dd class="mono" id="kv-foundry">—</dd></div>
-                <div><dt>Max agent calls / hour</dt><dd class="mono">30</dd></div>
-                <div><dt>Tools available to agent</dt><dd>None <span class="muted">(text only)</span></dd></div>
-              </dl>
-            </section>
-            <section class="panel" aria-labelledby="h-gh">
-              <div class="panel-head"><h2 id="h-gh">GitHub</h2></div>
-              <dl class="kv">
-                <div><dt>App ID</dt><dd class="mono" id="kv-appid">—</dd></div>
-                <div><dt>Webhook secret</dt><dd><span class="pill pill-ok">Key Vault</span></dd></div>
-                <div><dt>Skip bot authors</dt><dd>
-                  <span class="switch" role="switch" aria-checked="true" aria-readonly="true" aria-label="Skip bot authors"><span></span></span>
-                </dd></div>
-                <div><dt>Allowed repositories</dt><dd class="mono">MesilimLLC/Trackdub2</dd></div>
-              </dl>
-            </section>
-          </div>
-
-          <section class="panel" aria-labelledby="h-endpoints">
-            <div class="panel-head"><h2 id="h-endpoints">Endpoints</h2></div>
-            <ul class="endpoints">
-              <li><span class="method get">GET</span><span class="mono">/healthz</span><span class="muted">Reports status and whether GitHub is configured</span></li>
-              <li><span class="method post">POST</span><span class="mono">/github/webhook</span><span class="muted">HMAC-verified <span class="mono">pull_request</span> and <span class="mono">workflow_run</span> events</span></li>
-            </ul>
-          </section>
-        </section>
-      </main>
-    </div>
+    <footer class="app-footer">
+      <span>Trackdub2 Triage · ASP.NET Core webhook, static console</span>
+      <span class="footer-sep">·</span>
+      <a href="/healthz">/healthz</a>
+    </footer>
   </div>
-
-  <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
-  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden>
-    <div class="drawer-head">
-      <div>
-        <p class="eyebrow" id="drawer-eyebrow">Pull request</p>
-        <h2 id="drawer-title">—</h2>
-      </div>
-      <button class="icon-btn" id="drawer-close" aria-label="Close">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
-      </button>
-    </div>
-    <div class="drawer-body" id="drawer-body"></div>
-  </aside>
-
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-
   <script src="/app.js" defer></script>
 </body>
 </html>

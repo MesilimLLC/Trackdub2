@@ -1,310 +1,272 @@
-"use strict";
+(() => {
+  "use strict";
 
-const WEBHOOK_URL = "https://app-td2-triage-42dkfedvehtze.azurewebsites.net/github/webhook";
+  const REPO = "MesilimLLC/Trackdub2";
 
-const ICONS = {
-  pr: '<svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M6 8.5v7M18 15.5V10a3 3 0 0 0-3-3h-4"/><path d="m13 5-2 2 2 2"/></svg>',
-  ci: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m15 9-6 6M9 9l6 6"/></svg>',
-  check: '<svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg>',
-  arrow: '<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
-};
-
-// Placeholder data until the service exposes triage history.
-const TRIAGE = [
-  { id: 1, type: "pr", num: 48, title: "Port timing gate from Director with tolerance table", author: "amora", verdict: "ok", verdictText: "Looks good", tokens: 6120, mins: 4,
-    summary: "Ports the timing gate and its tolerance table. Behavior matches Director for the 14 fixtures included.",
-    points: ["`TimingGate.Evaluate` rounds before comparing; Director compared raw milliseconds. Confirm this is intended.", "Fixtures cover only single-speaker clips. Consider one overlapping-dialogue case."] },
-  { id: 2, type: "ci", num: 1182, title: "ci · tests (ubuntu-latest) failed on main", author: "github-actions", verdict: "bad", verdictText: "Failing", tokens: 3340, mins: 11,
-    summary: "`HourlyCallBudgetTests.ResetsAfterWindow` fails because the fake clock advances 59m instead of 60m.",
-    log: "  Failed HourlyCallBudgetTests.ResetsAfterWindow [12 ms]\n  Error Message:\n   <span class=\"err\">Assert.True() Failure</span>\n   Expected: True\n   Actual:   False",
-    points: ["Advance the `FakeTimeProvider` by `TimeSpan.FromHours(1)` in the test.", "No production code change needed."] },
-  { id: 3, type: "pr", num: 47, title: "Add Speech synthesis client with SSML prosody hints", author: "jdelgado", verdict: "warn", verdictText: "Needs changes", tokens: 8410, mins: 38,
-    summary: "Adds the Speech client. Retries are unbounded on 429, which can exhaust the hourly budget.",
-    points: ["Cap retries in `SynthesisClient.SendAsync` and honor `Retry-After`.", "SSML is built by string concatenation; escape line text before inserting it."] },
-  { id: 4, type: "pr", num: 46, title: "Bicep: add Key Vault reference for webhook secret", author: "amora", verdict: "ok", verdictText: "Looks good", tokens: 2950, mins: 125,
-    summary: "Wires the webhook secret through a Key Vault reference. Role assignment scope is correct.", points: ["No issues found."] },
-  { id: 5, type: "ci", num: 1176, title: "ci · bicep build failed on fix/storage-sku", author: "github-actions", verdict: "bad", verdictText: "Failing", tokens: 1880, mins: 210,
-    summary: "`Standard_ZRS` isn't available for the chosen storage kind in eastus.",
-    log: "  main.bicep(42,5) : <span class=\"err\">Error BCP036</span>: The property \"sku\" expected a value of type ...",
-    points: ["Use `Standard_LRS` for the spike, or switch kind to `StorageV2`."] },
-  { id: 6, type: "pr", num: 45, title: "Meaning gate: compare back-translation embeddings", author: "rkhan", verdict: "warn", verdictText: "Needs changes", tokens: 7230, mins: 380,
-    summary: "Threshold of 0.82 is hardcoded in two places and disagrees with the grader (0.85).",
-    points: ["Move the threshold to `GateOptions` and share it with `grader/`.", "Add a test where idioms translate non-literally."] },
-];
-
-const RUNS = [
-  { title: "Episode 04 · cold open", file: "ep04_open.wav", dur: "02:14", lines: 38, status: "ok", statusText: "Passed", gates: [["Timing", "ok"], ["Meaning", "ok"], ["Audio", "ok"]], cost: "$0.92", live: false },
-  { title: "Trailer v3", file: "trailer_v3.wav", dur: "01:02", lines: 17, status: "warn", statusText: "Running", gates: [["Timing", "ok"], ["Meaning", "warn"], ["Audio", "muted"]], cost: "$0.31", live: true },
-  { title: "Interview · Dr. Ruiz", file: "ruiz_int.wav", dur: "06:48", lines: 112, status: "bad", statusText: "2 lines blocked", gates: [["Timing", "bad"], ["Meaning", "ok"], ["Audio", "ok"]], cost: "$2.77", live: false },
-];
-
-const STAGES = [
-  ["Input", "Transcribe", "Azure Speech STT"],
-  ["Agent", "Plan lines", "Orchestrator"],
-  ["Agent", "Translate", "EN → ES"],
-  ["Gate", "Timing", "Fits source slot"],
-  ["Gate", "Meaning", "Back-translation"],
-  ["Agent", "Synthesize", "Neural voice"],
-  ["Gate", "Audio", "Measured length"],
-];
-
-const state = { health: null, filter: "all", query: "", lastFocus: null };
-
-const $ = (sel, root = document) => root.querySelector(sel);
-const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-const inline = (s) => esc(s).replace(/`([^`]+)`/g, "<code>$1</code>");
-const ago = (m) => (m < 60 ? `${m}m` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`);
-const pillClass = (v) => ({ ok: "pill-ok", warn: "pill-warn", bad: "pill-bad" })[v] || "pill-muted";
-
-function toast(msg) {
-  const t = $("#toast");
-  t.textContent = msg;
-  t.hidden = false;
-  clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => (t.hidden = true), 2200);
-}
-
-/* Routing */
-const ROUTES = { overview: "Overview", triage: "Triage", dubbing: "Dubbing", setup: "Setup", settings: "Settings" };
-function route() {
-  const name = location.hash.slice(1) in ROUTES ? location.hash.slice(1) : "overview";
-  $$(".view").forEach((v) => (v.hidden = v.dataset.view !== name));
-  $$(".nav-link").forEach((a) => (a.dataset.route === name ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
-  $("#crumb-current").textContent = ROUTES[name];
-  document.title = `${ROUTES[name]} · Trackdub 2`;
-  closeSidebar();
-  window.scrollTo(0, 0);
-}
-
-/* Health */
-async function checkHealth(announce) {
-  try {
-    const res = await fetch("/healthz", { cache: "no-store" });
-    if (!res.ok) throw new Error(String(res.status));
-    state.health = await res.json();
-  } catch {
-    state.health = { status: "down" };
-  }
-  renderHealth();
-  renderSetup();
-  if (announce) toast(state.health.status === "ok" ? "Service is healthy" : "Service unreachable");
-}
-
-function renderHealth() {
-  const h = state.health;
-  const up = h?.status === "ok";
-  const configured = !!h?.githubConfigured;
-  const cls = !up ? "bad" : configured ? "ok" : "warn";
-  const label = !up ? "Service unreachable" : configured ? "Healthy · receiving webhooks" : "Healthy · GitHub not connected";
-
-  const pill = $("#health-pill");
-  $(".status-dot", pill).className = `status-dot ${cls}`;
-  $(".health-text", pill).textContent = label;
-  $("#side-dot").className = `status-dot ${cls}`;
-  $("#side-status").textContent = !up ? "Offline" : configured ? "Operational" : "Awaiting GitHub";
-  $("#setup-banner").hidden = !up || configured;
-  $("#kv-appid").textContent = configured ? "Configured" : "Not set";
-  $("#kv-foundry").textContent = up ? "Lazy · on first call" : "—";
-}
-
-/* Overview */
-function renderRecent() {
-  $("#recent-list").innerHTML = TRIAGE.slice(0, 5).map((t) => `
-    <li><button data-open="${t.id}">
-      <span class="act-icon" aria-hidden="true">${ICONS[t.type]}</span>
-      <span class="act-main">
-        <span class="act-title">${esc(t.title)}</span>
-        <span class="act-meta">${t.type === "pr" ? "PR" : "Run"} #${t.num} · ${esc(t.author)}</span>
-      </span>
-      <span class="pill ${pillClass(t.verdict)}">${t.verdictText}</span>
-      <span class="act-time">${ago(t.mins)}</span>
-    </button></li>`).join("");
-  $("#nav-triage-count").textContent = TRIAGE.length;
-}
-
-function renderPipeline() {
-  $("#pipeline-overview").innerHTML = STAGES.map(([kind, name, meta], i) => `
-    ${i ? `<span class="connector" aria-hidden="true">${ICONS.arrow}</span>` : ""}
-    <div class="stage ${kind === "Gate" ? "gate" : ""}">
-      <span class="stage-kind">${kind}</span>
-      <span class="stage-name">${name}</span>
-      <span class="stage-meta">${meta}</span>
-    </div>`).join("");
-}
-
-/* Setup */
-function setupSteps() {
-  const configured = !!state.health?.githubConfigured;
-  return [
-    { title: "Deploy infrastructure", done: true, text: "Foundry, Speech, storage, Key Vault and App Service from <span class=\"mono\">infra/main.bicep</span>." },
-    { title: "Create the GitHub App", done: configured, text: "On MesilimLLC, name it <strong>Trackdub2 Triage</strong>. Point the webhook here and paste the secret from Key Vault.",
-      copy: WEBHOOK_URL, perms: ["Pull requests: Read & write", "Actions: Read", "Metadata: Read"] },
-    { title: "Store the private key", done: configured, text: "Generate a key, save it to Key Vault as <span class=\"mono\">github-app-private-key</span>, then delete the .pem.",
-      copy: "az keyvault secret set --vault-name kv-td2-42dkfedvehtze --name github-app-private-key --file <key>.pem" },
-    { title: "Redeploy with the App ID", done: configured, text: "Set <span class=\"mono\">GITHUB_APP_ID</span> so Bicep stays the source of truth, then restart the web app." },
-    { title: "Install on Trackdub2", done: configured, text: "Install App › MesilimLLC › Only select repositories › Trackdub2." },
-    { title: "Verify health", done: configured, text: "<span class=\"mono\">/healthz</span> should report <span class=\"mono\">githubConfigured: true</span>. Then open a test pull request." },
+  const SAMPLE = [
+    {
+      delivery: "a4f1c2e0-7b31", at: "2 min ago", event: "pull_request", action: "opened",
+      title: "#48 Add Spanish dub export path", url: `https://github.com/${REPO}/pull/48`, author: "mesilim-dev",
+      outcome: "commented", tokens: { input: 6120, output: 412 },
+      context: "diff --git a/src/Export/DubExportPlanner.cs\n+    if (target.Language == \"es\")\n+        plan.AddTrack(\"es-ES\", mix);\n... 214 lines, 6 files",
+      comment: [
+        "<p><strong>Summary.</strong> Adds an <code>es-ES</code> track to the export plan.</p>",
+        "<ul><li>No test covers the new branch in <code>DubExportPlanner</code>.</li>",
+        "<li>The language check is case-sensitive; <code>ES</code> would be skipped.</li></ul>",
+      ].join(""),
+      steps: [
+        ["Signature", "X-Hub-Signature-256 matched", "pass", 1],
+        ["Allowlist", REPO, "pass", 0],
+        ["Filters", "Not a draft, human author", "pass", 0],
+        ["Fetch diff", "214 lines from 6 files", "pass", 380],
+        ["Agent call", "gpt-6-luna, no tools", "pass", 4210],
+        ["Comment", "Created comment", "pass", 290],
+      ],
+    },
+    {
+      delivery: "9c02e8b1-14aa", at: "18 min ago", event: "workflow_run", action: "completed",
+      title: "ci / build-and-test failed on feat/console-ui", url: `https://github.com/${REPO}/actions`, author: "github-actions",
+      outcome: "edited", tokens: { input: 3880, output: 296 },
+      context: "job: test (ubuntu-latest)\n  Failed Trackdub2.Triage.Tests.TriageAgentTests.StartsWithoutEndpoint\n  Expected: 200  Actual: 500\n... last 80 log lines",
+      comment: [
+        "<p><strong>Failure.</strong> One test in <code>TriageAgentTests</code> returns 500 where 200 is expected.</p>",
+        "<ul><li>Likely cause: the Foundry client is created at startup.</li>",
+        "<li>Updated the earlier comment on this run instead of posting a new one.</li></ul>",
+      ].join(""),
+      steps: [
+        ["Signature", "X-Hub-Signature-256 matched", "pass", 1],
+        ["Allowlist", REPO, "pass", 0],
+        ["Fetch logs", "Tail of 1 failed job", "pass", 610],
+        ["Agent call", "gpt-6-luna, no tools", "pass", 3120],
+        ["Comment", "Edited existing comment", "pass", 240],
+      ],
+    },
+    {
+      delivery: "51be77d3-0c9f", at: "41 min ago", event: "workflow_run", action: "completed",
+      title: "ci / lint failed on main", url: `https://github.com/${REPO}/actions`, author: "github-actions",
+      outcome: "notevaluated", reason: "Hourly agent budget reached (30/30). Not a pass: review this run by hand.",
+      context: "job: lint\n  error: 3 formatting issues in src/Trackdub2.Triage/Program.cs",
+      steps: [
+        ["Signature", "X-Hub-Signature-256 matched", "pass", 1],
+        ["Allowlist", REPO, "pass", 0],
+        ["Fetch logs", "Tail of 1 failed job", "pass", 520],
+        ["Agent call", "Budget reached, call not made", "notevaluated", 0],
+      ],
+    },
+    {
+      delivery: "e7d4a019-3b62", at: "1 h ago", event: "pull_request", action: "synchronize",
+      title: "#46 Bump Azure.AI.Projects from 1.0.0 to 1.1.0", url: `https://github.com/${REPO}/pull/46`, author: "dependabot[bot]",
+      outcome: "skipped", reason: "Bot author",
+      steps: [
+        ["Signature", "X-Hub-Signature-256 matched", "pass", 1],
+        ["Allowlist", REPO, "pass", 0],
+        ["Filters", "Author is a bot", "skip", 0],
+      ],
+    },
+    {
+      delivery: "2f8c6d55-a7e0", at: "2 h ago", event: "pull_request", action: "opened",
+      title: "#45 WIP: audition lane spike", url: `https://github.com/${REPO}/pull/45`, author: "mesilim-dev",
+      outcome: "skipped", reason: "Draft pull request",
+      steps: [
+        ["Signature", "X-Hub-Signature-256 matched", "pass", 1],
+        ["Allowlist", REPO, "pass", 0],
+        ["Filters", "Pull request is a draft", "skip", 0],
+      ],
+    },
+    {
+      delivery: "0b3a9f72-d811", at: "3 h ago", event: "pull_request", action: "opened",
+      title: "Delivery with a bad signature", url: null, author: "unknown",
+      outcome: "rejected", reason: "Signature mismatch. Returned 401, nothing queued.",
+      steps: [["Signature", "X-Hub-Signature-256 did not match", "fail", 1]],
+    },
   ];
-}
 
-function renderSetup() {
-  const steps = setupSteps();
-  const doneCount = steps.filter((s) => s.done).length;
-  const currentIdx = steps.findIndex((s) => !s.done);
+  const OUTCOME = {
+    commented: { label: "Commented", cls: "verdict-pass", group: "commented" },
+    edited: { label: "Edited", cls: "verdict-pass", group: "commented" },
+    skipped: { label: "Skipped", cls: "verdict-idle", group: "skipped" },
+    notevaluated: { label: "Not evaluated", cls: "verdict-notevaluated", group: "attention" },
+    rejected: { label: "Rejected", cls: "verdict-fail", group: "attention" },
+  };
+  const STEP = {
+    pass: ["Pass", "verdict-pass"], skip: ["Skipped", "verdict-idle"],
+    fail: ["Fail", "verdict-fail"], notevaluated: ["Not evaluated", "verdict-notevaluated"],
+  };
 
-  $("#progress-count").textContent = `${doneCount} / ${steps.length}`;
-  $("#ring-fill").style.strokeDashoffset = String(213.6 * (1 - doneCount / steps.length));
-  $("#ring-title").textContent = doneCount === steps.length ? "All set" : doneCount ? "In progress" : "Not started";
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-  $("#mini-steps").innerHTML = steps.map((s) => `
-    <li class="${s.done ? "done" : ""}"><span class="check" aria-hidden="true">${s.done ? ICONS.check : ""}</span>${s.title}<span class="sr-only">${s.done ? " (done)" : " (to do)"}</span></li>`).join("");
+  const state = { events: SAMPLE.slice(), filter: "all", expanded: new Set([SAMPLE[0].delivery]), configured: null };
 
-  $("#steps").innerHTML = steps.map((s, i) => `
-    <li class="step ${s.done ? "done" : i === currentIdx ? "current" : ""}">
-      <span class="step-num" aria-hidden="true">${s.done ? ICONS.check.replace("<svg", '<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="3"') : i + 1}</span>
-      <div class="step-body">
-        <div class="step-title">${s.title}
-          ${s.done ? '<span class="pill pill-ok">Done</span>' : i === currentIdx ? '<span class="pill pill-warn">Next</span>' : ""}
-        </div>
-        <p class="step-text">${s.text}</p>
-        ${s.perms ? `<div class="perm-list">${s.perms.map((p) => `<span class="pill pill-muted">${p}</span>`).join("")}</div>` : ""}
-        ${s.copy ? `<div class="copy-row"><code>${esc(s.copy)}</code><button class="copy-btn" data-copy="${esc(s.copy)}">Copy</button></div>` : ""}
-      </div>
-    </li>`).join("");
-}
+  function toast(message) {
+    const el = $("toast");
+    el.textContent = message;
+    el.hidden = false;
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(() => { el.hidden = true; }, 3200);
+  }
 
-/* Triage */
-function renderTriage() {
-  const q = state.query.toLowerCase();
-  const rows = TRIAGE.filter((t) => (state.filter === "all" || t.type === state.filter) &&
-    (!q || `${t.title} ${t.author} ${t.num}`.toLowerCase().includes(q)));
-  $("#triage-body").innerHTML = rows.map((t) => `
-    <tr tabindex="0" data-open="${t.id}" aria-label="Open ${esc(t.title)}">
-      <td><div class="item-cell"><span>${esc(t.title)}</span><span class="item-num">${t.type === "pr" ? "#" : "run "}${t.num}</span></div></td>
-      <td><span class="muted">${t.type === "pr" ? "Pull request" : "CI failure"}</span></td>
-      <td><span class="pill ${pillClass(t.verdict)}">${t.verdictText}</span></td>
-      <td><span class="avatar"><span aria-hidden="true">${esc(t.author.slice(0, 2).toUpperCase())}</span><span>${esc(t.author)}</span></span></td>
-      <td class="num mono">${t.tokens.toLocaleString()}</td>
-      <td class="num mono muted">${ago(t.mins)} ago</td>
-    </tr>`).join("");
-  $("#triage-empty").hidden = rows.length > 0;
-}
+  function setPill(id, text, tone) {
+    const pill = $(id);
+    pill.classList.remove("pill-ok", "pill-warn", "pill-fail");
+    pill.classList.add(`pill-${tone}`);
+    $(`${id}-value`).textContent = text;
+  }
 
-/* Dubbing */
-function renderRuns() {
-  $("#runs").innerHTML = RUNS.map((r, ri) => {
-    const bars = Array.from({ length: 48 }, (_, i) => {
-      const h = 18 + Math.abs(Math.sin(i * 0.55 + ri * 2) * 60 + Math.sin(i * 1.7 + ri) * 22);
-      return `<span style="height:${Math.min(100, h).toFixed(0)}%"></span>`;
+  function renderBanners() {
+    const host = $("banners");
+    if (state.configured === false) {
+      host.innerHTML = `<div class="banner-wrap-warn"><div class="banner">GitHub App not configured. Set <code>Triage__GitHubAppId</code> and <code>Triage__GitHubPrivateKey</code>, then restart. Webhooks return 503 until then. The console still loads.</div></div>`;
+    } else if (state.configured === null && state.healthError) {
+      host.innerHTML = `<div class="banner-wrap-error"><div class="banner">Could not reach <code>/healthz</code>: ${esc(state.healthError)}</div></div>`;
+    } else {
+      host.innerHTML = "";
+    }
+  }
+
+  async function loadHealth() {
+    try {
+      const res = await fetch("/healthz", { cache: "no-store" });
+      const body = await res.json();
+      state.configured = Boolean(body.githubConfigured);
+      state.healthError = null;
+      setPill("pill-health", body.status ?? "unknown", body.status === "ok" ? "ok" : "warn");
+      setPill("pill-github", state.configured ? "configured" : "not set", state.configured ? "ok" : "warn");
+      $("report-json").textContent = JSON.stringify(body, null, 2);
+    } catch (err) {
+      state.configured = null;
+      state.healthError = err.message;
+      setPill("pill-health", "unreachable", "fail");
+      setPill("pill-github", "unknown", "warn");
+      $("report-json").textContent = `// ${err.message}`;
+    }
+    renderBanners();
+    updateStageButtons();
+  }
+
+  function updateStageButtons() {
+    document.querySelectorAll("[data-stage]").forEach((btn) => {
+      const needsGitHub = btn.dataset.stage !== "ping";
+      btn.disabled = needsGitHub && state.configured !== true;
+      btn.title = btn.disabled ? "Needs the GitHub App to be configured" : "";
+    });
+  }
+
+  function renderSummary() {
+    const ev = state.events;
+    const count = (g) => ev.filter((e) => OUTCOME[e.outcome].group === g).length;
+    const budget = Number($("set-budget").value) || 30;
+    const calls = ev.filter((e) => e.tokens).length + (ev.some((e) => e.outcome === "notevaluated") ? budget - 2 : 0);
+    $("stat-total").textContent = ev.length;
+    $("stat-commented").textContent = count("commented");
+    $("stat-skipped").textContent = count("skipped");
+    $("stat-budget").textContent = `${Math.min(calls, budget)}/${budget}`;
+
+    document.querySelectorAll(".seg-btn").forEach((btn) => {
+      const f = btn.dataset.filter;
+      const n = f === "all" ? ev.length : count(f);
+      btn.innerHTML = `${esc(btn.dataset.label ?? (btn.dataset.label = btn.textContent))}<span class="seg-count">${n}</span>`;
+    });
+
+    const tokens = ev.reduce((sum, e) => sum + (e.tokens ? e.tokens.input + e.tokens.output : 0), 0);
+    $("settings-estimate").textContent = `${tokens.toLocaleString()} tokens across ${ev.filter((e) => e.tokens).length} agent calls`;
+  }
+
+  function stepsPanel(e) {
+    const rows = e.steps.map(([stage, detail, result, ms], i) => {
+      const [label, cls] = STEP[result];
+      return `<div class="attempt-row"><span class="attempt-step">${i + 1}</span><span>${esc(stage)}</span><span>${esc(detail)}</span><span><span class="verdict ${cls}">${label}</span></span><span class="attempt-ms">${ms ? `${ms} ms` : "—"}</span></div>`;
     }).join("");
-    return `
-    <article class="run">
-      <div class="run-head">
-        <div><p class="run-title">${r.title}</p><p class="run-sub">${r.file} · ${r.dur} · ${r.lines} lines</p></div>
-        <span class="pill ${pillClass(r.status)}">${r.statusText}</span>
+    const io = e.context
+      ? `<div class="director-grid">
+          <div><div class="director-label">Untrusted input</div><pre class="code-block">${esc(e.context)}</pre></div>
+          <div><div class="director-label">Posted comment</div>${e.comment ? `<div class="comment-body">${e.comment}</div>` : `<div class="comment-body"><p class="line-translation is-empty">No comment posted.</p></div>`}</div>
+        </div>`
+      : "";
+    const usage = e.tokens ? `<span class="token-usage">Tokens: ${e.tokens.input.toLocaleString()} in · ${e.tokens.output.toLocaleString()} out</span>` : "";
+    return `<div class="attempts-panel">
+      <div class="attempt-row attempt-row-header"><span>#</span><span>Stage</span><span>Detail</span><span>Result</span><span class="attempt-ms">Time</span></div>
+      ${rows}${io}${usage}
+    </div>`;
+  }
+
+  function card(e) {
+    const o = OUTCOME[e.outcome];
+    const open = state.expanded.has(e.delivery);
+    const tone = e.outcome === "rejected" ? " is-failed" : o.group === "attention" ? " is-attention" : "";
+    const preview = e.comment
+      ? `<div class="line-translation">${esc(e.comment.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim())}</div>`
+      : `<div class="line-translation is-empty">${esc(e.reason ?? "No comment")}</div>`;
+    const title = e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noreferrer">${esc(e.title)}</a>` : esc(e.title);
+    const reason = e.outcome === "notevaluated" ? `<div class="meaning-issues">${esc(e.reason)}</div>` : "";
+    return `<article class="line-card${tone}" role="listitem">
+      <div class="line-main">
+        <div class="line-top"><span class="line-id">${esc(e.delivery)}</span><span class="line-time">${esc(e.at)}</span></div>
+        <div class="line-source">${title}</div>
+        ${preview}
+        <div class="line-meta">
+          <span class="verdict ${o.cls}">${o.label}</span>
+          <span class="meta-pill meta-mono">${esc(e.event)}.${esc(e.action)}</span>
+          <span class="meta-pill">${esc(e.author)}</span>
+          <span>Steps: ${e.steps.length}</span>
+          ${e.tokens ? `<span>Tokens: ${(e.tokens.input + e.tokens.output).toLocaleString()}</span>` : ""}
+        </div>
       </div>
-      <div class="wave ${r.live ? "live" : ""}" aria-hidden="true">${bars}</div>
-      <div class="gates" aria-label="Gate results">${r.gates.map(([g, v]) => `<span class="pill ${pillClass(v)}">${g}</span>`).join("")}</div>
-      <div class="run-foot"><span>Cost <span class="mono">${r.cost}</span></span><span class="sample-chip">Sample</span></div>
+      ${reason}
+      <div class="line-actions">
+        <button type="button" class="expand-btn" data-toggle="${esc(e.delivery)}" aria-expanded="${open}">${open ? "Hide steps" : "Show steps"}</button>
+        ${o.group === "attention" ? `<button type="button" class="expand-btn" data-retry="${esc(e.delivery)}">Retry delivery</button>` : ""}
+      </div>
+      ${open ? stepsPanel(e) : ""}
     </article>`;
-  }).join("");
-}
-
-/* Drawer */
-function openDrawer(id) {
-  const t = TRIAGE.find((x) => x.id === Number(id));
-  if (!t) return;
-  state.lastFocus = document.activeElement;
-  $("#drawer-eyebrow").textContent = t.type === "pr" ? `Pull request #${t.num}` : `Workflow run ${t.num}`;
-  $("#drawer-title").textContent = t.title;
-  $("#drawer-body").innerHTML = `
-    <dl class="meta-grid">
-      <div><dt>Verdict</dt><dd><span class="pill ${pillClass(t.verdict)}">${t.verdictText}</span></dd></div>
-      <div><dt>Tokens</dt><dd class="mono">${t.tokens.toLocaleString()}</dd></div>
-      <div><dt>Posted</dt><dd>${ago(t.mins)} ago</dd></div>
-    </dl>
-    ${t.log ? `<div><h3 class="small muted" style="margin-bottom:8px">Failed job log tail</h3><pre class="log">${t.log}</pre></div>` : ""}
-    <div class="comment">
-      <div class="comment-head"><strong>trackdub2-triage</strong><span class="bot-badge">bot</span><span>commented ${ago(t.mins)} ago</span></div>
-      <div class="comment-body">
-        <h3>Summary</h3>
-        <p>${inline(t.summary)}</p>
-        <h3>Worth a look</h3>
-        <ul>${t.points.map((p) => `<li>${inline(p)}</li>`).join("")}</ul>
-        <p class="muted small">Written by gpt-6-luna. Edited in place on new pushes.</p>
-      </div>
-    </div>
-    <a class="btn btn-ghost" href="https://github.com/MesilimLLC/Trackdub2/${t.type === "pr" ? `pull/${t.num}` : "actions"}" target="_blank" rel="noopener noreferrer">Open on GitHub</a>`;
-  $("#drawer").hidden = false;
-  $("#drawer-backdrop").hidden = false;
-  $("#drawer-close").focus();
-}
-
-function closeDrawer() {
-  if ($("#drawer").hidden) return;
-  $("#drawer").hidden = true;
-  $("#drawer-backdrop").hidden = true;
-  state.lastFocus?.focus?.();
-}
-
-/* Mobile sidebar */
-function closeSidebar() {
-  $(".sidebar").classList.remove("open");
-  $("#menu-btn").setAttribute("aria-expanded", "false");
-}
-
-/* Events */
-document.addEventListener("click", async (e) => {
-  const open = e.target.closest("[data-open]");
-  if (open) return openDrawer(open.dataset.open);
-
-  const copy = e.target.closest("[data-copy]");
-  if (copy) {
-    try { await navigator.clipboard.writeText(copy.dataset.copy); toast("Copied to clipboard"); }
-    catch { toast("Copy failed. Select the text instead."); }
-    return;
   }
 
-  const filter = e.target.closest("[data-filter]");
-  if (filter) {
-    state.filter = filter.dataset.filter;
-    $$("[data-filter]").forEach((b) => b.setAttribute("aria-selected", String(b === filter)));
-    return renderTriage();
+  function renderLines() {
+    const list = state.events.filter((e) => state.filter === "all" || OUTCOME[e.outcome].group === state.filter);
+    $("lines").innerHTML = list.map(card).join("");
+    $("empty-state").hidden = list.length > 0;
   }
-});
 
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") { closeDrawer(); closeSidebar(); }
-  if ((e.key === "Enter" || e.key === " ") && e.target.matches("tr[data-open]")) {
-    e.preventDefault();
-    openDrawer(e.target.dataset.open);
+  function render() {
+    renderSummary();
+    renderLines();
   }
-  const typing = e.target.matches("input, textarea");
-  if (e.key === "/" && !typing) {
-    e.preventDefault();
-    location.hash = "triage";
-    requestAnimationFrame(() => $("#triage-search").focus());
-  }
-});
 
-$("#triage-search").addEventListener("input", (e) => { state.query = e.target.value; renderTriage(); });
-$("#cmd-btn").addEventListener("click", () => { location.hash = "triage"; requestAnimationFrame(() => $("#triage-search").focus()); });
-$("#drawer-close").addEventListener("click", closeDrawer);
-$("#drawer-backdrop").addEventListener("click", closeDrawer);
-$("#recheck-btn").addEventListener("click", () => checkHealth(true));
-$("#new-run-btn").addEventListener("click", () => toast("Pipeline CLI isn't wired up yet"));
-$("#menu-btn").addEventListener("click", () => {
-  const open = $(".sidebar").classList.toggle("open");
-  $("#menu-btn").setAttribute("aria-expanded", String(open));
-});
-window.addEventListener("hashchange", route);
+  document.addEventListener("click", (ev) => {
+    const target = ev.target.closest("button");
+    if (!target) return;
 
-renderRecent();
-renderPipeline();
-renderTriage();
-renderRuns();
-renderSetup();
-route();
-checkHealth(false);
-setInterval(() => checkHealth(false), 30000);
+    if (target.dataset.toggle) {
+      const id = target.dataset.toggle;
+      state.expanded.has(id) ? state.expanded.delete(id) : state.expanded.add(id);
+      renderLines();
+    } else if (target.dataset.retry) {
+      toast(state.configured ? `Queued ${target.dataset.retry} for another run.` : "Retry needs the GitHub App to be configured.");
+    } else if (target.dataset.filter) {
+      state.filter = target.dataset.filter;
+      document.querySelectorAll(".seg-btn").forEach((b) => {
+        const active = b === target;
+        b.classList.toggle("is-active", active);
+        b.setAttribute("aria-pressed", String(active));
+      });
+      renderLines();
+    } else if (target.dataset.stage === "ping") {
+      fetch("/github/webhook", { method: "POST", headers: { "X-GitHub-Event": "ping" }, body: "{}" })
+        .then((r) => toast(`Webhook answered ${r.status}${r.status === 503 ? " (GitHub App not configured)" : ""}.`))
+        .catch((err) => toast(`Webhook unreachable: ${err.message}`));
+    } else if (target.dataset.stage) {
+      toast("Replays are not wired up yet.");
+    } else if (target.id === "btn-sample") {
+      state.events = SAMPLE.slice();
+      state.expanded = new Set([SAMPLE[0].delivery]);
+      render();
+      toast("Loaded sample deliveries.");
+    }
+  });
+
+  $("set-budget").addEventListener("input", renderSummary);
+
+  render();
+  loadHealth();
+  setInterval(loadHealth, 15000);
+})();
