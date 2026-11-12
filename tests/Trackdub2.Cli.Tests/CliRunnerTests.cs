@@ -118,6 +118,15 @@ public class CliRunnerTests
     }
 
     [Fact]
+    public void Option_immediately_after_config_is_not_taken_as_the_path()
+    {
+        var result = Invoke("--config", "--help");
+
+        Assert.Equal(CliRunner.ExitUsageError, result.Exit);
+        Assert.Contains("--help", result.Err);
+    }
+
+    [Fact]
     public void Help_prints_usage_and_succeeds()
     {
         var result = Invoke("--help");

@@ -28,7 +28,7 @@ public static class CliRunner
         {
             switch (args[i])
             {
-                case "--config" when i + 1 < args.Length:
+                case "--config" when i + 1 < args.Length && !args[i + 1].StartsWith('-'):
                     path = args[++i];
                     break;
                 case "--help" or "-h":
