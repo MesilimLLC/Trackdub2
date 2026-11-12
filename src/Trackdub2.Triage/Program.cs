@@ -38,6 +38,9 @@ if (!string.IsNullOrEmpty(builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_
 
 WebApplication app = builder.Build();
 
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.MapGet("/healthz", (TriageOptions o) => Results.Ok(new { status = "ok", githubConfigured = o.IsGitHubConfigured }));
 
 app.MapPost("/github/webhook", async (HttpRequest request, TriageOptions o, TriageQueue queue, ILogger<Program> logger) =>
