@@ -82,7 +82,7 @@ public static class MeaningGate
         string content = rawContent.Trim();
         int start = content.IndexOf('{');
         int end = start < 0 ? -1 : FindObjectEnd(content, start);
-        if (end >= 0 && content.IndexOf('{', end) >= 0)
+        if (end >= 0 && ContainsSecondJsonObject(content, end))
         {
             return FailClosed(rawContent, "ambiguous meaning response: more than one JSON object");
         }
@@ -108,6 +108,32 @@ public static class MeaningGate
         {
             return FailClosed(rawContent, "unparseable meaning response");
         }
+    }
+
+    private static bool ContainsSecondJsonObject(string content, int from)
+    {
+        for (int i = content.IndexOf('{', from); i >= 0; i = content.IndexOf('{', i + 1))
+        {
+            int close = FindObjectEnd(content, i);
+            if (close < 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                using JsonDocument doc = JsonDocument.Parse(content[i..close]);
+                if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                {
+                    return true;
+                }
+            }
+            catch (JsonException)
+            {
+            }
+        }
+
+        return false;
     }
 
     private static MeaningCheckResult FailClosed(string rawContent, string issue)
